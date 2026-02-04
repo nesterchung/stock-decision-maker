@@ -1,0 +1,29 @@
+version: "0.2"
+
+price_field: "adj_close"
+window: 20
+bench: "SPY"
+
+signals:
+  energy:
+    kind: "relative_strength"
+    a: "XLE"
+    b: "SPY"
+    rule: "gt_sma"
+
+  tech:
+    kind: "relative_strength"
+    a: "XLK"
+    b: "SPY"
+    rule: "gt_sma"
+
+  utilities:
+    kind: "relative_strength"
+    a: "XLU"
+    b: "SPY"
+    rule: "gt_sma"
+
+  rates:
+    kind: "price_proxy"
+    ticker: "TLT"
+    rule: "lt_sma"
