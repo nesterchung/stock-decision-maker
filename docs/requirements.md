@@ -37,12 +37,24 @@ Canonical output schema (example):
 Validator rules:
 - Use same date set and same price field across implementations
 - Recompute signals per spec and diff against Python canonical output
+- Robust CSV parsing with csv-parse library supporting quoted fields and extra columns
 - Any mismatch -> non-zero exit (CI fail)
 
 Next actions (implementation-oriented):
 1. Define technical architecture (data ingestion, canonical compute, storage format, validator flow)
 2. Scaffold project structure (python module, node validator, CI workflow)
 3. Implement Python canonical generator + small runner
-4. Implement Node validator and CI gate
-5. Add tests, sample data, and README
+4. Implement Node validator and CI gate ✅
+5. Add tests, sample data, and README ✅
+6. Enhance Node CSV parsing with robust library ✅
+
+## Implementation Updates
+
+**Enhanced CSV Parsing (Latest):**
+- Migrated from naive string splitting to csv-parse library
+- Added support for quoted fields with commas
+- Configured `relax_column_count: true` for extra columns
+- Configured `relax_quotes: true` for flexible quote handling
+- Made CSV parsing async with proper error handling
+- Maintained full backward compatibility
 

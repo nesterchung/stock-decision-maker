@@ -1,0 +1,6 @@
+date,XLE,TLT,XLK,XLU,SPY,extra_field,notes
+2025-12-01,75.0,110.0,150.0,65.0,400.0,extra1,"First day with notes"
+2025-12-02,75.5,109.5,151.0,65.2,401.0,extra2,"Second day, data looks good"
+2025-12-03,76.0,109.0,152.0,65.1,402.0,extra3,"Contains, comma in quoted field"
+2025-12-04,76.2,108.7,152.5,65.3,402.5,extra4,"Normal day"
+2025-12-05,76.1,108.9,152.7,65.4,402.7,extra5,"Another note"
