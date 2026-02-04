@@ -99,6 +99,15 @@ v0.1 Scope
 - Daily frequency
 - Sector ETF proxies (XLE, TLT, XLK, XLU)
 
+Data requirements and enforcement
+
+- The input `prices.csv` must represent adjusted close prices. Preferred column naming is `<TICKER>_adj_close` (for example `XLE_adj_close`).
+- Backwards-compatibility: plain ticker columns like `XLE` are accepted but a runtime WARNING is emitted. For strict enforcement, provide files with `<TICKER>_adj_close` columns.
+
+SMA NA policy
+
+- If the SMA window is not yet filled (i.e. fewer than `window` observations), the signal value MUST be `NA` for that date. Both Python and Node validator follow this rule to guarantee consistent diffs.
+
 v0.2 Planned
 
 - Configurable windows (20/50/200)

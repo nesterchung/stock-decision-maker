@@ -9,6 +9,14 @@ Summary of key requirements and implementation notes extracted from PRD.md.
 - Price field: `adj_close` (fallback to `close` if unavailable) — must be consistent across Python/Node
 - Window: 20-day SMA; dates with fewer than 20 days -> output `NA` (or skip) to avoid diff churn
 
+Data enforcement notes:
+
+- The input `prices.csv` MUST represent adjusted close prices. Preferred column naming is `<TICKER>_adj_close` (e.g. `XLE_adj_close`). If plain ticker columns are used (e.g. `XLE`), the Python compute will emit a runtime WARNING but accept the file for backwards compatibility. For production ingestion, provide `<TICKER>_adj_close` columns.
+
+SMA NA policy (formal):
+
+- If the SMA window is not yet filled (fewer than `window` observations), the signal value MUST be `NA` for that date. Both Python and Node implementations are required to follow this rule to ensure CI diffs are deterministic.
+
 Signals (v0.1):
 - Energy: `RS_energy = close(XLE)/close(SPY)`; Energy = `UP` if `RS_energy > SMA(RS_energy,20)` else `DOWN`
 - Rates: intent = yields up (tightening). Use `TLT` as proxy. Rates = `UP` if `close(TLT) < SMA(close(TLT),20)` else `DOWN`

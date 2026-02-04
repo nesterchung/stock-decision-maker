@@ -5,5 +5,8 @@
   "main": "validator.js",
   "scripts": {
     "validate": "node validator.js --prices ../../tests/sample/prices.csv --canonical ../../data/canonical.ndjson --window 20"
+  },
+  "dependencies": {
+    "csv-parse": "^6.1.0"
   }
 }

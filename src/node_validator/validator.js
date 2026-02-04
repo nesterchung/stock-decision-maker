@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { parse } = require('csv-parse');
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -18,28 +19,38 @@ function parseArgs() {
 }
 
 function readCSV(p) {
-  const txt = fs.readFileSync(p, 'utf8').trim();
-  const lines = txt.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-  const header = lines[0].split(',').map(h => h.trim());
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i].split(',').map(x => x.trim());
-    const obj = {};
-    for (let j = 0; j < header.length; j++) {
-      obj[header[j]] = parts[j];
-    }
-    rows.push(obj);
-  }
-  // parse numeric fields and keep date strings
-  return rows.map(r => {
-    return {
-      date: r['date'],
-      XLE: parseFloat(r['XLE']),
-      TLT: parseFloat(r['TLT']),
-      XLK: parseFloat(r['XLK']),
-      XLU: parseFloat(r['XLU']),
-      SPY: parseFloat(r['SPY']),
-    };
+  const content = fs.readFileSync(p, 'utf8');
+  
+  return new Promise((resolve, reject) => {
+    const results = [];
+    
+    parse(content, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+      relax_column_count: true, // handle extra columns
+      relax_quotes: true, // handle quoted fields more flexibly
+    })
+    .on('data', (data) => {
+      results.push(data);
+    })
+    .on('end', () => {
+      // parse numeric fields and keep date strings
+      const parsed = results.map(r => {
+        return {
+          date: r['date'],
+          XLE: parseFloat(r['XLE']),
+          TLT: parseFloat(r['TLT']),
+          XLK: parseFloat(r['XLK']),
+          XLU: parseFloat(r['XLU']),
+          SPY: parseFloat(r['SPY']),
+        };
+      });
+      resolve(parsed);
+    })
+    .on('error', (error) => {
+      reject(error);
+    });
   });
 }
 
@@ -94,41 +105,46 @@ function readCanonical(p) {
   return map;
 }
 
-function main() {
-  const args = parseArgs();
-  const rows = readCSV(args.prices);
-  // ensure sorted by date lexicographically
-  rows.sort((a, b) => a.date.localeCompare(b.date));
+async function main() {
+  try {
+    const args = parseArgs();
+    const rows = await readCSV(args.prices);
+    // ensure sorted by date lexicographically
+    rows.sort((a, b) => a.date.localeCompare(b.date));
 
-  const computed = computeSignals(rows, args.window);
-  const canonical = readCanonical(args.canonical);
+    const computed = computeSignals(rows, args.window);
+    const canonical = readCanonical(args.canonical);
 
-  const mismatches = [];
-  for (const rec of computed) {
-    const date = rec.date;
-    if (!canonical.has(date)) {
-      mismatches.push({ date, reason: 'missing_in_canonical' });
-      continue;
-    }
-    const can = canonical.get(date);
-    const fields = ['energy', 'rates', 'tech', 'utilities'];
-    for (const f of fields) {
-      const a = rec.signals[f];
-      const b = can.signals[f];
-      if (a !== b) {
-        mismatches.push({ date, field: f, expected: b, actual: a });
+    const mismatches = [];
+    for (const rec of computed) {
+      const date = rec.date;
+      if (!canonical.has(date)) {
+        mismatches.push({ date, reason: 'missing_in_canonical' });
+        continue;
+      }
+      const can = canonical.get(date);
+      const fields = ['energy', 'rates', 'tech', 'utilities'];
+      for (const f of fields) {
+        const a = rec.signals[f];
+        const b = can.signals[f];
+        if (a !== b) {
+          mismatches.push({ date, field: f, expected: b, actual: a });
+        }
       }
     }
-  }
 
-  if (mismatches.length === 0) {
-    console.log('VALIDATOR: OK — no mismatches found');
-    process.exit(0);
-  } else {
-    console.error('VALIDATOR: MISMATCHES FOUND:', mismatches.length);
-    for (const m of mismatches.slice(0, 20)) console.error(JSON.stringify(m));
-    if (mismatches.length > 20) console.error('...');
-    process.exit(1);
+    if (mismatches.length === 0) {
+      console.log('VALIDATOR: OK — no mismatches found');
+      process.exit(0);
+    } else {
+      console.error('VALIDATOR: MISMATCHES FOUND:', mismatches.length);
+      for (const m of mismatches.slice(0, 20)) console.error(JSON.stringify(m));
+      if (mismatches.length > 20) console.error('...');
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error('Error:', error.message);
+    process.exit(2);
   }
 }
 

@@ -75,15 +75,49 @@ def compute_signals(prices_wide: pd.DataFrame, window: int = 20):
     return out
 
 
-def read_wide_csv(path: Path):
+def read_wide_csv(path: Path, price_field: str = "adj_close"):
+    """Read a wide CSV where each ticker is a column.
+
+    Expected column formats (in order of preference):
+    - <TICKER>_<price_field> (e.g. XLE_adj_close)
+    - <TICKER> (plain column name; assumed to already be adj_close)
+
+    For v0.1 we require the CSV to represent adjusted close prices. If the
+    file uses plain ticker column names (no suffix), a WARNING is emitted but
+    the file is accepted to preserve backward-compatibility with the sample
+    data. For stricter enforcement, callers should ensure columns use the
+    "_<price_field>" suffix and/or validate upstream data source.
+    """
     df = pd.read_csv(path, parse_dates=["date"])
     df = df.set_index("date")
-    # Ensure required columns exist
-    required = ["XLE", "TLT", "XLK", "XLU", "SPY"]
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns in prices CSV: {missing}")
-    return df
+
+    required_tickers = ["XLE", "TLT", "XLK", "XLU", "SPY"]
+
+    # Detect columns with suffix, prefer <TICKER>_<price_field>
+    resolved_cols = {}
+    suffixed = [f"{t}_{price_field}" for t in required_tickers]
+    if all(c in df.columns for c in suffixed):
+        for t, c in zip(required_tickers, suffixed):
+            resolved_cols[t] = c
+    else:
+        # Fallback to plain ticker columns
+        missing_plain = [t for t in required_tickers if t not in df.columns]
+        if missing_plain:
+            raise ValueError(
+                f"Missing required columns in prices CSV: {missing_plain}.\n"
+                f"Expected either plain tickers {required_tickers} or suffixed columns {suffixed} where suffixed means the price_field (e.g. adj_close) is included."
+            )
+        # Issue a warning if plain columns are used (ask to use adj_close explicitly)
+        print(
+            "WARNING: Input CSV uses plain ticker columns (no '_adj_close' suffix). Please ensure these values are adjusted close prices (adj_close). For strict enforcement, provide files with '<TICKER>_adj_close' columns.)"
+        )
+        for t in required_tickers:
+            resolved_cols[t] = t
+
+    # Reindex dataframe to required columns in canonical order
+    df2 = df[[resolved_cols[t] for t in required_tickers]].copy()
+    df2.columns = required_tickers
+    return df2
 
 
 def main():
