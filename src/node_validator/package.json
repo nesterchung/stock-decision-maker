@@ -1,0 +1,9 @@
+{
+  "name": "mse-node-validator",
+  "version": "0.1.0",
+  "description": "Node validator for Market State Engine v0.1",
+  "main": "validator.js",
+  "scripts": {
+    "validate": "node validator.js --prices ../../tests/sample/prices.csv --canonical ../../data/canonical.ndjson --window 20"
+  }
+}

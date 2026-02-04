@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  python-canonical:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Run Python unit tests
+        run: python -m pytest tests/python/ -v
+      
+      - name: Run canonical compute
+        run: python -m src.python_mse.compute --input tests/sample/prices.csv --out data/canonical.ndjson
+      
+      - name: Upload canonical output
+        uses: actions/upload-artifact@v3
+        with:
+          name: canonical-ndjson
+          path: data/canonical.ndjson
+
+  node-validator:
+    runs-on: ubuntu-latest
+    needs: python-canonical
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Set up Python (for canonical compute)
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Generate canonical output
+        run: python -m src.python_mse.compute --input tests/sample/prices.csv --out data/canonical.ndjson
+      
+      - name: Run Node unit tests
+        run: node tests/node/test_validator.js
+      
+      - name: Run validator against canonical
+        run: node src/node_validator/validator.js --prices tests/sample/prices.csv --canonical data/canonical.ndjson --window 20
