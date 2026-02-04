@@ -1,10 +1,14 @@
-import unittest
-import pandas as pd
 import sys
+import unittest
 from pathlib import Path
 
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-from python_mse.compute import compute_signals
+from python_mse.compute import (  # noqa: E402
+    compute_market_state_v04,
+    compute_signals,
+)
 
 
 class TestSignalComputation(unittest.TestCase):
@@ -174,7 +178,8 @@ class TestSignalComputation(unittest.TestCase):
         df = pd.DataFrame(data, index=pd.date_range("2025-01-01", periods=21))
         records = compute_signals(df, window=20)
 
-        # At index 20: RS_energy = 105/400 = 0.2625, MA_energy ≈ 0.25, so RS > MA → UP
+        # At index 20: RS_energy = 105/400 = 0.2625, MA_energy ≈ 0.25
+        # so RS > MA → UP
         self.assertEqual(records[20]["signals"]["energy"], "UP")
 
     def test_schema_completeness(self):
@@ -199,6 +204,96 @@ class TestSignalComputation(unittest.TestCase):
         self.assertListEqual(
             record["inputs"]["tickers"], ["XLE", "TLT", "XLK", "XLU", "SPY"]
         )
+
+
+class TestMarketStateV04(unittest.TestCase):
+    def setUp(self):
+        self.config = {
+            "market_state": {
+                "version": "0.4",
+                "enabled": True,
+                "required_signals": ["tech", "utilities", "rates"],
+                "labels_order": ["RISK_ON", "RISK_OFF", "MIXED"],
+                "labels": {
+                    "RISK_ON": {
+                        "all": [
+                            {"signal": "tech", "is": "UP"},
+                            {"signal": "utilities", "is": "DOWN"},
+                            {"signal": "rates", "is": "DOWN"},
+                        ]
+                    },
+                    "RISK_OFF": {
+                        "all": [
+                            {"signal": "tech", "is": "DOWN"},
+                            {"signal": "utilities", "is": "UP"},
+                            {"signal": "rates", "is": "UP"},
+                        ]
+                    },
+                    "MIXED": {"default": True},
+                },
+                "output": {
+                    "field": "state",
+                    "include_debug": False,
+                    "na_label": "NA",
+                },
+            }
+        }
+
+    def test_risk_on_match(self):
+        signals = {
+            "tech": {"signal": "UP"},
+            "utilities": {"signal": "DOWN"},
+            "rates": {"signal": "DOWN"},
+        }
+        result = compute_market_state_v04(signals, self.config)
+        self.assertEqual(result["label"], "RISK_ON")
+        self.assertEqual(result["rule"], "v0.4_config")
+
+    def test_risk_off_match(self):
+        signals = {
+            "tech": {"signal": "DOWN"},
+            "utilities": {"signal": "UP"},
+            "rates": {"signal": "UP"},
+        }
+        result = compute_market_state_v04(signals, self.config)
+        self.assertEqual(result["label"], "RISK_OFF")
+        self.assertEqual(result["rule"], "v0.4_config")
+
+    def test_mixed_default(self):
+        signals = {
+            "tech": {"signal": "UP"},
+            "utilities": {"signal": "UP"},
+            "rates": {"signal": "DOWN"},
+        }
+        result = compute_market_state_v04(signals, self.config)
+        self.assertEqual(result["label"], "MIXED")
+
+    def test_na_when_missing_required(self):
+        signals = {
+            "tech": {"signal": "UP"},
+            "utilities": {"signal": "DOWN"},
+        }
+        result = compute_market_state_v04(signals, self.config)
+        self.assertEqual(result["label"], "NA")
+        self.assertIn("missing", result)
+        self.assertIn("rates", result["missing"])
+
+    def test_disabled_behavior(self):
+        config = {
+            **self.config,
+            "market_state": {
+                **self.config["market_state"],
+                "enabled": False,
+            },
+        }
+        signals = {
+            "tech": {"signal": "UP"},
+            "utilities": {"signal": "DOWN"},
+            "rates": {"signal": "DOWN"},
+        }
+        result = compute_market_state_v04(signals, config)
+        self.assertEqual(result["label"], "NA")
+        self.assertEqual(result["rule"], "disabled")
 
 
 if __name__ == "__main__":

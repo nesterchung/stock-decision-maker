@@ -31,3 +31,32 @@ signals:
 state:
   rule: "v0.3_basic"
   required: ["tech", "utilities", "rates"]
+
+market_state:
+  version: "0.4"
+  enabled: true
+  required_signals: ["tech", "utilities", "rates"]
+  labels_order: ["RISK_ON", "RISK_OFF", "MIXED"]
+  labels:
+    RISK_ON:
+      all:
+        - signal: tech
+          is: "UP"
+        - signal: utilities
+          is: "DOWN"
+        - signal: rates
+          is: "DOWN"
+    RISK_OFF:
+      all:
+        - signal: tech
+          is: "DOWN"
+        - signal: utilities
+          is: "UP"
+        - signal: rates
+          is: "UP"
+    MIXED:
+      default: true
+  output:
+    field: "state"
+    include_debug: false
+    na_label: "NA"

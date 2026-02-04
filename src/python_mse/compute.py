@@ -47,6 +47,105 @@ def compute_signal(value_series: pd.Series, sma_series: pd.Series, rule: str):
     return signal, val, sma
 
 
+def validate_market_state_config(config: dict):
+    """Validate market_state configuration for v0.4."""
+    market_state = config.get("market_state")
+    if not isinstance(market_state, dict):
+        raise ValueError("market_state config is required and must be a dict")
+
+    required_signals = market_state.get("required_signals")
+    if not isinstance(required_signals, list) or not required_signals:
+        raise ValueError("market_state.required_signals must be a non-empty list")
+    if not all(isinstance(name, str) for name in required_signals):
+        raise ValueError("market_state.required_signals must contain only strings")
+
+    labels_order = market_state.get("labels_order")
+    if not isinstance(labels_order, list) or not labels_order:
+        raise ValueError("market_state.labels_order must be a non-empty list")
+    if not all(isinstance(name, str) for name in labels_order):
+        raise ValueError("market_state.labels_order must contain only strings")
+
+    labels = market_state.get("labels")
+    if not isinstance(labels, dict):
+        raise ValueError("market_state.labels must be a dict")
+
+    for label in labels_order:
+        label_def = labels.get(label)
+        if not isinstance(label_def, dict):
+            raise ValueError(f"market_state.labels.{label} must be a dict")
+
+        has_default = label_def.get("default") is True
+        has_all = "all" in label_def
+
+        if has_default and not has_all:
+            continue
+
+        conditions = label_def.get("all")
+        if not isinstance(conditions, list) or not conditions:
+            raise ValueError(
+                f"market_state.labels.{label}.all must be a non-empty list"
+            )
+        for condition in conditions:
+            if not isinstance(condition, dict):
+                raise ValueError(
+                    f"market_state.labels.{label}.all entries must be dicts"
+                )
+            if "signal" not in condition or "is" not in condition:
+                message = (
+                    "market_state.labels."
+                    f"{label}.all entries require 'signal' and 'is'"
+                )
+                raise ValueError(message)
+
+
+def compute_market_state_v04(signals: dict, config: dict):
+    """Compute v0.4 market state label from config-driven rules."""
+    validate_market_state_config(config)
+    market_state = config.get("market_state", {})
+    output_config = market_state.get("output", {})
+    na_label = output_config.get("na_label", "NA")
+
+    if market_state.get("enabled", True) is False:
+        return {"label": na_label, "rule": "disabled"}
+
+    required_signals = market_state.get("required_signals", [])
+    missing = []
+    for name in required_signals:
+        if name not in signals:
+            missing.append(name)
+            continue
+        signal_value = signals[name].get("signal") if name in signals else None
+        if "signal" not in signals[name] or signal_value == "NA":
+            missing.append(name)
+
+    if missing:
+        return {"label": na_label, "rule": "v0.4_config", "missing": missing}
+
+    actual = {name: signals[name]["signal"] for name in required_signals}
+    labels_order = market_state.get("labels_order", [])
+    labels = market_state.get("labels", {})
+
+    for label in labels_order:
+        label_def = labels.get(label, {})
+        conditions = label_def.get("all")
+        if not conditions:
+            continue
+        matches = all(actual.get(cond["signal"]) == cond["is"] for cond in conditions)
+        if matches:
+            return {"label": label, "rule": "v0.4_config"}
+
+    default_label = None
+    for label, label_def in labels.items():
+        if label_def.get("default") is True:
+            default_label = label
+            break
+
+    if default_label is not None:
+        return {"label": default_label, "rule": "v0.4_config"}
+
+    return {"label": "MIXED", "rule": "v0.4_config"}
+
+
 def compute_signals_v2(prices_wide: pd.DataFrame, config: dict):
     """Compute signals based on config-driven logic (v0.2).
 
@@ -65,6 +164,11 @@ def compute_signals_v2(prices_wide: pd.DataFrame, config: dict):
     bench = config.get("bench", "SPY")
     signals_config = config.get("signals", {})
     version = config.get("version", "0.2")
+
+    market_state_config = config.get("market_state", {})
+    market_state_version = market_state_config.get("version")
+    if market_state_version == "0.4":
+        validate_market_state_config(config)
 
     # Pre-compute all signal values and SMAs
     signal_data = {}
@@ -133,7 +237,20 @@ def compute_signals_v2(prices_wide: pd.DataFrame, config: dict):
             signals[signal_name] = signal
 
         row["signals"] = signals
-        row["state"] = compute_market_state(signals)
+        if market_state_version == "0.4":
+            field = market_state_config.get("output", {}).get(
+                "field",
+                "state",
+            )
+            signals_for_state = {
+                name: {"signal": signal} for name, signal in signals.items()
+            }
+            row[field] = compute_market_state_v04(
+                signals_for_state,
+                config,
+            )
+        else:
+            row["state"] = compute_market_state(signals)
         row["metrics"] = metrics
         row["inputs"] = {
             "price_field": price_field,
@@ -277,13 +394,19 @@ def read_wide_csv(path: Path, price_field: str = "adj_close"):
         # Fallback to plain ticker columns
         missing_plain = [t for t in required_tickers if t not in df.columns]
         if missing_plain:
-            raise ValueError(
+            message = (
                 f"Missing required columns in prices CSV: {missing_plain}.\n"
-                f"Expected either plain tickers {required_tickers} or suffixed columns {suffixed} where suffixed means the price_field (e.g. adj_close) is included."
+                "Expected either plain tickers "
+                f"{required_tickers} or suffixed columns {suffixed} where "
+                "suffixed means the price_field (e.g. adj_close) is included."
             )
+            raise ValueError(message)
         # Issue a warning if plain columns are used (ask to use adj_close explicitly)
         print(
-            "WARNING: Input CSV uses plain ticker columns (no '_adj_close' suffix). Please ensure these values are adjusted close prices (adj_close). For strict enforcement, provide files with '<TICKER>_adj_close' columns.)"
+            "WARNING: Input CSV uses plain ticker columns (no '_adj_close' "
+            "suffix). Please ensure these values are adjusted close prices "
+            "(adj_close). For strict enforcement, provide files with "
+            "'<TICKER>_adj_close' columns.)"
         )
         for t in required_tickers:
             resolved_cols[t] = t
@@ -299,17 +422,28 @@ def main():
         description="Compute Market State Engine v0.2 canonical signals"
     )
     p.add_argument(
-        "--input", "-i", required=True, help="Input wide CSV with date + ticker columns"
+        "--input",
+        "-i",
+        required=True,
+        help="Input wide CSV with date + ticker columns",
     )
     p.add_argument("--window", "-w", type=int, default=20, help="SMA window")
     p.add_argument(
-        "--out", "-o", default="data/canonical.ndjson", help="Output ndjson file"
+        "--out",
+        "-o",
+        default="data/canonical.ndjson",
+        help="Output ndjson file",
     )
     p.add_argument(
-        "--config", "-c", default=None, help="Path to signals.yaml config file"
+        "--config",
+        "-c",
+        default=None,
+        help="Path to signals.yaml config file",
     )
     p.add_argument(
-        "--legacy", action="store_true", help="Use v0.1 hardcoded logic (for testing)"
+        "--legacy",
+        action="store_true",
+        help="Use v0.1 hardcoded logic (for testing)",
     )
     args = p.parse_args()
 
