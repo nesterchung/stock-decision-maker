@@ -38,7 +38,6 @@ function testSmaNaPolicy() {
   // Ensure SMA window not filled => 'NA' signals
   const window = 20;
   const len = 25;
-  const tlt = new Array(len).fill(100);
   const values = new Array(len).fill(1);
   const ma = movingAverage(values, window);
   const signals = values.map((v, i) => ma[i] === null ? 'NA' : (v > ma[i] ? 'UP' : 'DOWN'));

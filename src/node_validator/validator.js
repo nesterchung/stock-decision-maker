@@ -1,5 +1,4 @@
 const fs = require('fs');
-const path = require('path');
 const { parse } = require('csv-parse');
 
 function parseArgs() {
@@ -136,7 +135,7 @@ function readCanonical(p) {
     try {
       const obj = JSON.parse(l);
       map.set(obj.date, obj);
-    } catch (e) {
+    } catch (_e) {
       console.error('Failed to parse canonical line:', l);
     }
   }

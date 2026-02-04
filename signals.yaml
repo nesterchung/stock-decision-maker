@@ -27,3 +27,7 @@ signals:
     kind: "price_proxy"
     ticker: "TLT"
     rule: "lt_sma"
+
+state:
+  rule: "v0.3_basic"
+  required: ["tech", "utilities", "rates"]

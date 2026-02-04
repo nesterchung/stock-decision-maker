@@ -4,9 +4,15 @@
   "description": "Node validator for Market State Engine v0.2",
   "main": "validator.js",
   "scripts": {
-    "validate": "node validator.js --prices ../../tests/sample/prices.csv --canonical ../../data/canonical.ndjson --window 20"
+    "validate": "node validator.js --prices ../../tests/sample/prices.csv --canonical ../../data/canonical.ndjson --window 20",
+    "lint": "cd ../.. && node ./src/node_validator/node_modules/eslint/bin/eslint.js -c ./eslint.config.js \"./src/node_validator/validator.js\" \"./tests/node/*.js\"",
+    "lint:fix": "cd ../.. && node ./src/node_validator/node_modules/eslint/bin/eslint.js -c ./eslint.config.js \"./src/node_validator/validator.js\" \"./tests/node/*.js\" --fix"
   },
   "dependencies": {
     "csv-parse": "^6.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "eslint": "^9.39.0"
   }
 }

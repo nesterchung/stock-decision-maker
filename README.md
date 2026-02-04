@@ -166,3 +166,15 @@ Future Enhancements
 - Alternative yield curves for Rates
 - Volatility and credit signals
 
+
+## Data Requirement (v0.2)
+
+The validator expects a normalized `prices.csv` with the following contract:
+
+- Columns: date, ticker, adj_close
+- One row per (date, ticker)
+- Identical trading days across all tickers
+- No missing values
+
+Data ingestion is intentionally out of scope for v0.2.
+
